@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>Amazon Website Testing</h1>
+    <p>Report generated on 06-Jul-2022 at 16:08:03 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.1.2"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19044-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"Faker": "13.14.0", "html": "3.1.1", "metadata": "2.0.1"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>3 tests ran in 85.59 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">2 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">1 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">testcases/test_amz_home.py::TestAmzHome::test_search_3___dbms____1__</td>
+          <td class="col-duration">15.00</td>
+          <td class="col-links"><a class="url" href="https://www.amazon.in/s?k=dbms&amp;crid=VFGFVZXSHFSQ&amp;sprefix=dbms%2Caps%2C568&amp;ref=nb_sb_noss_1" target="_blank">URL</a> </td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div><img src='screen_shots/1657103880665.png' alt='screenshot' style='width:35%' onclick='window.open(this.src)' align='right'/></div></div>
+            <div class="log">self = &lt;testcases.test_amz_home.TestAmzHome testMethod=test_search_3___dbms____1__&gt;, search_word = &#x27;dbms&#x27;, page_no = &#x27;1&#x27;<br/><br/>    @data(*ut.get_csv_data(&quot;./testdata/testdata.csv&quot;))<br/>    @unpack<br/>    def test_search(self, search_word, page_no):<br/>    	self.amzh.search_item(search_word, int(page_no))<br/>    	search_data = self.amzsr.get_search_data()<br/>    	items = self.ut.get_items_text(search_data)<br/>&gt;   	self.ut.display_data(items)<br/><br/>testcases\test_amz_home.py:33: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>utilities\utils.py:24: in display_data<br/>    self.assert_all()<br/>venv\lib\site-packages\softest\case.py:139: in assert_all<br/>    self.fail(&#x27;&#x27;.join(failure_output))<br/><span class="error">E   AssertionError: ++++ soft assert failure details follow below ++++</span><br/><span class="error">E   </span><br/><span class="error">E   ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++</span><br/><span class="error">E   The following failure was found in &quot;wrapper&quot; (utilities.utils.Utility):</span><br/><span class="error">E   +----------------------+----------------------+----------------------+</span><br/><span class="error">E   Traceback (most recent call last):</span><br/><span class="error">E     File &quot;C:\kiran\selenium\project4\utilities\utils.py&quot;, line 18, in display_data</span><br/><span class="error">E       self.soft_assert(self.assertTrue,len(item)&gt;5)</span><br/><span class="error">E     File &quot;C:\kiran\selenium\project4\testcases\test_amz_home.py&quot;, line 33, in test_search</span><br/><span class="error">E       self.ut.display_data(items)</span><br/><span class="error">E     File &quot;C:\kiran\selenium\project4\venv\lib\site-packages\ddt.py&quot;, line 191, in wrapper</span><br/><span class="error">E       return func(self, *args, **kwargs)</span><br/><span class="error">E     File &quot;C:\kiran\selenium\project4\venv\lib\site-packages\softest\case.py&quot;, line 62, in soft_assert</span><br/><span class="error">E       assert_method(*arguments, **keywords)</span><br/><span class="error">E     File &quot;E:\python\Lib\unittest\case.py&quot;, line 679, in assertTrue</span><br/><span class="error">E       raise self.failureException(msg)</span><br/><span class="error">E   AssertionError: False is not true</span><br/><span class="error">E   </span><br/><span class="error">E   -+ [1/1] +-</span><br/> ------------------------------Captured stdout call------------------------------ <br/>1. Database System Concepts | 7th Edition | Passed
+2. DATABASE MANAGEMENT SYSTEMS (DBMS) (MU) - Second Year (S.E) Degree Course in Information Technology (IT) Engineering - Semester 3 - As Per 2020-21 Syllabus | Passed
+3. AICTE Recommended| Fundamentals of Database Systems| By Pearson | Passed
+4. Database Management Systems (Dbms) | Passed
+5. Introduction to DBMS: Designing and Implementing Databases from Scratch for Absolute Beginners (English Edition) | Passed
+6. [Gautam Bapat] ADVANCED DBMS (CBCS Pattern MCA MANAGEMENT: Semester 2) | Passed
+7. DATABASE MANAGEMENT SYSTEMS (DBMS) (MU) - Second Year (S.E) Degree Course in Information Technology (IT) Engineering - Semester 3 - As Per 2020-21 Syllabus | Passed
+8. Decode Distributed DBMS for GTU 18 Course (VII -CE/CSE/IT - 2170714) | Passed
+9. DBMS - Database Management System | Passed
+10. DBMS Handwritten Notes of Computer Science for GATE | Passed
+11. MANAGEMENT OF HETEROGENEOUS AND AUTONOMOUS DATABASE SYSTEMS | Passed
+12. Advanced Database Management System | Passed
+13. DBMS: A Simplified Approach | Passed
+14. The Top 100 DBMS MCQ Questions | Passed
+15. Database Management Systems -The Detailed Version: DBMS | Passed
+16. Most Important DBMS interview questions and Answers | Passed
+17. Distributed DBMS for GTU 13 Course (VII - CE/CSE/IT - 2170714) | Passed
+18. Learn DBMS basics in 30 days | Passed
+19. DBMS | Failed
+20. Advaced Oracle DBMS Packages: The Definitive Reference: 41 (Oracle In-focus Series) | Passed
+21. Distributed Databases (Includes Practicals) (DT-Engineering Textbooks) | Passed
+22. MySQL, 5/e, 5e | Passed
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     C:\kiran\selenium\project4\pages\amz_home.py:amz_home.py:41 Item Searched with keyword : dbms
+INFO     C:\kiran\selenium\project4\pages\amz_search_results.py:amz_search_results.py:21 Item Search completed.<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_amz_home.py::TestAmzHome::test_search_1___mysql_programming____2__</td>
+          <td class="col-duration">56.01</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>
+<br/> -----------------------------Captured stderr setup------------------------------ <br/>[WDM] - ====== WebDriver manager ======
+[WDM] - Current google-chrome version is 103.0.5060
+[WDM] - Get LATEST chromedriver version for 103.0.5060 google-chrome
+[WDM] - About to download new driver from https://chromedriver.storage.googleapis.com/103.0.5060.53/chromedriver_win32.zip
+[WDM] - Driver has been saved in cache [./utilities/chrome\.wdm\drivers\chromedriver\win32\103.0.5060.53]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:16 ====== WebDriver manager ======
+INFO     WDM:logger.py:16 Current google-chrome version is 103.0.5060
+INFO     WDM:logger.py:16 Get LATEST chromedriver version for 103.0.5060 google-chrome
+INFO     WDM:logger.py:16 About to download new driver from https://chromedriver.storage.googleapis.com/103.0.5060.53/chromedriver_win32.zip
+INFO     WDM:logger.py:16 Driver has been saved in cache [./utilities/chrome\.wdm\drivers\chromedriver\win32\103.0.5060.53]<br/> ------------------------------Captured stdout call------------------------------ <br/>1. Web Technologies: HTML, JAVASCRIPT, PHP, JAVA, JSP, ASP.NET, XML and Ajax, Black Book | Passed
+2. HTML 5 Black Book, Covers CSS 3, JavaScript, XML, XHTML, AJAX, PHP and jQuery, 2ed | Passed
+3. The Joy of PHP: A Beginner&#x27;s Guide to Programming Interactive Web Applications with PHP and mySQL | Passed
+4. PHP Tutorials: Programming with PHP and MySQL: Learn PHP 7 / 8 with MySQL Databases for the Web | Passed
+5. Php, Html, And Mariadb/mysql To Essential Algorithms, Syntax, And Control Structures Programming | Passed
+6. PHP and MySQL Programming for Beginners: A Step by Step Course From Zero to Professional (Programming is Easy Book 5) | Passed
+7. Dynamic Web Programming With The Latest Versions Of Today’s Core Technologies: Php, Mysql, Javascript, Css, Html5, And Key Jquery Libraries | Passed
+8. Learning PHP, MySQL &amp; JavaScript with j Query, CSS &amp; HTML5 | Passed
+9. MySQL (Developer&#x27;s Library) | Passed
+10. PHP &amp; MySQL: Server-side Web Development | Passed
+11. MySQL and Java Developer&#x27;s Guide (Java Open Source Library) | Passed
+12. Developing a React.js Edge, 2ed: The Javascript Library For User Interfaces | Passed
+13. MySQL(TM): The Complete Reference | Passed
+14. PHP &amp; MySQL: Novice to Ninja, Seventh Edition (Grayscale Indian Edition) | Passed
+15. Html, Css, Php, Bootstrap, Javascript And Mysql To Create A Dynamic Site | Passed
+16. Learn SQL Database Programming: Query and manipulate databases from popular relational database servers using SQL | Passed
+17. SQL Programming | The Ultimate Guide for Beginner&#x27;s to Advance | 2022 | Passed
+18. MySQL Administrator&#x27;s Bible | Passed
+19. Learn PHP: Learn PHP From Beginner To Advanced: Learn Mysql Book | Passed
+20. Questions &amp; Answers On C#, C++, HTML, CSS, JQuery, JavaScript, JAVA, Linux, PHP, MySQL, Python, Visual Basic Courses | Passed
+21. Web Application Development - A Conceptual Approach | Passed
+22. SQL in MySQL: Learn and Practice | Passed
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     C:\kiran\selenium\project4\pages\amz_home.py:amz_home.py:41 Item Searched with keyword : mysql programming
+INFO     C:\kiran\selenium\project4\pages\amz_search_results.py:amz_search_results.py:21 Item Search completed.<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_amz_home.py::TestAmzHome::test_search_2___html_programming____1__</td>
+          <td class="col-duration">10.92</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>1. HTML Programming for Beginners: How to Learn HTML in Less Than a Week. The Ultimate Step-by-Step Complete Course from Novice to Advanced Programmer | Passed
+2. Introduction to Interactive Programming on the Internet: Using HTML and JavaScript | Passed
+3. C++: The Ultimate Crash Course to Learning C++ (From Basics to Advanced): 2 (Guide, C Programming, Html, Javascript, Programming, All, Internet, Coding, Css, Java, PHP) | Passed
+4. Programming: HTML: Programming Guide: Computer Programming: LEARN IN A DAY! (PHP, Java, Web Design, Computer Programming, SQL, HTML, PHP) | Passed
+5. Start Programming Using HTML, CSS, and JavaScript (Chapman &amp; Hall/CRC Textbooks in Computing) | Passed
+6. Beginning Web Programming with HTML, XHTML, and CSS | Passed
+7. Blossom Computer Books for Kids | Part 5 - 8 | Learn Computers Fundamentals, Features and Applications like Programming in C and C++, Powerpoint, HTML, QBASIC, Virus, .NET and DBMS | Pack of 4 Books | Passed
+8. Html: HTML &amp; CSS: For Beginners: Your Step by Step Guide to Easily HtmL &amp; Css Programming in 7 Days (Programming Languages) | Passed
+9. Programming: Programming QuickStart Box Set - HTML, Javascript &amp; CSS (Programming, HTML, Javascript, CSS, Computer Programming) | Passed
+10. HTML: HTML5, JavaScript and jQuery - Learn HTML Programming FAST: The Ultimate HTML Programming Crash Course! (JavaScript, programming, Linux command line, ... HTML, CSS, C++, Java, PHP, code Book 1) | Passed
+11. HTML 5 Black Book, Covers CSS 3, JavaScript, XML, XHTML, AJAX, PHP and jQuery, 2ed | Passed
+12. Core Java: An Integrated Approach, New: Includes All Versions upto Java 8 | Passed
+13. Programming for Beginners: 3 Books in 1- HTML+CSS+JavaScript (Basic Fundamental Guide for Beginners) | Passed
+14. Programming: SQL: Programming Guide: Javascript and Coding: LEARN IN A DAY! (SQL, Wed Design, Java, Computer Programming, HTML, SQL, CSS) | Passed
+15. Programming: Swift: Create A Fully Functioning App: Learn In A Day! (Apps, PHP, HTML, Python, Programming Guide, Java, App Development) | Passed
+16. HTML Beginner&#x27;s Crash Course: HTML for Beginner&#x27;s Guide to Learning HTML, HTML &amp; CSS, &amp; Web Design (HTML5, HTML5 and CSS3, HTML Programming, HTML CSS, HTML for Beginners, HTML Programming) | Passed
+17. HTML: Step by Step Beginners Guide to HTML (Programming for Beginners in under 8 hours!) | Passed
+18. HTML Programming for Beginners: How to Learn HTML in Less Than a Week. The Ultimate Step-by-Step Complete Course from Novice to Advanced Programmer | Passed
+19. A Beginner&#x27;s Guide to Computer Programming Using HTML, CSS and JavaScript | Passed
+20. Html, Css And Javascript To Programming Windows Store Apps | Passed
+21. Coding with Javascript for Dummies | Passed
+22. Beginning HTML and CSS (Wrox Beginning Guideswrox Programmer to Programmer) | Passed
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     C:\kiran\selenium\project4\pages\amz_home.py:amz_home.py:41 Item Searched with keyword : html programming
+INFO     C:\kiran\selenium\project4\pages\amz_search_results.py:amz_search_results.py:21 Item Search completed.<br/></div></td></tr></tbody></table></body></html>
